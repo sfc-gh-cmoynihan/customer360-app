@@ -1,0 +1,11 @@
+profile:
+  label: "Customer 360"
+  description: "Unified customer master record search with AI-powered insights"
+  icon: public/icon.svg
+
+install:
+  commands:
+    - ["npm", "ci", "--include=dev"]
+
+run:
+  command: ["node", ".next/standalone/server.js"]
