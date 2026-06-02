@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
-import { Building, User, Shield, Users, Car } from "lucide-react"
+import { Building, User, Shield, Users, Car, TrendingDown, Activity } from "lucide-react"
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
 
 interface SearchResult {
   MASTER_CUSTOMER_ID: string
@@ -30,12 +31,31 @@ interface Dependent {
   LICENSE_TYPE: string
 }
 
+interface ChurnFactor {
+  score: number
+  weight: number
+  detail: string
+}
+
+interface ChurnData {
+  score: number
+  riskLevel: string
+  factors: {
+    sentiment: ChurnFactor
+    policies: ChurnFactor
+    spend: ChurnFactor
+    tenure: ChurnFactor
+    age: ChurnFactor
+  }
+}
+
 interface CustomerSummary {
   totalPremiums: number
   totalCost: number
   tier: string
   contracts: { CONTRACT_TITLE: string; CONTRACT_VALUE: string; STATUS: string }[]
   dependents: Dependent[]
+  churn?: ChurnData
 }
 
 interface SearchPanelProps {
@@ -47,6 +67,14 @@ const TIER_STYLES: Record<string, { bg: string; color: string }> = {
   Silver: { bg: "rgba(148, 163, 184, 0.15)", color: "#64748b" },
   Bronze: { bg: "rgba(180, 83, 9, 0.15)", color: "#b45309" },
 }
+
+const CHURN_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  Low: { bg: "rgba(34, 197, 94, 0.12)", color: "#16a34a", label: "LOW RISK" },
+  Medium: { bg: "rgba(249, 115, 22, 0.12)", color: "#ea580c", label: "MEDIUM RISK" },
+  High: { bg: "rgba(220, 38, 38, 0.12)", color: "#dc2626", label: "HIGH RISK" },
+}
+
+const PIE_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"]
 
 export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
   const [companyQuery, setCompanyQuery] = useState("")
@@ -145,6 +173,20 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
   }
 
   const tierStyle = summary ? TIER_STYLES[summary.tier] || TIER_STYLES.Bronze : null
+  const churnStyle = summary?.churn ? CHURN_STYLES[summary.churn.riskLevel] || CHURN_STYLES.Medium : null
+
+  const premiumChartData = summary?.contracts.map(c => ({
+    name: c.CONTRACT_TITLE.replace(" Insurance", "").replace(" Protection", " Prot."),
+    value: parseFloat(c.CONTRACT_VALUE) || 0
+  })).filter(d => d.value > 0) || []
+
+  const churnFactorData = summary?.churn ? [
+    { name: "Sentiment", score: summary.churn.factors.sentiment.score, fill: summary.churn.factors.sentiment.score > 50 ? "#ef4444" : "#10b981" },
+    { name: "Policies", score: summary.churn.factors.policies.score, fill: summary.churn.factors.policies.score > 50 ? "#ef4444" : "#10b981" },
+    { name: "Spend", score: summary.churn.factors.spend.score, fill: summary.churn.factors.spend.score > 50 ? "#ef4444" : "#10b981" },
+    { name: "Tenure", score: summary.churn.factors.tenure.score, fill: summary.churn.factors.tenure.score > 50 ? "#ef4444" : "#10b981" },
+    { name: "Age", score: summary.churn.factors.age.score, fill: summary.churn.factors.age.score > 50 ? "#ef4444" : "#10b981" },
+  ] : []
 
   return (
     <div>
@@ -200,11 +242,19 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
         <div className="card" style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div style={{ fontWeight: 600, fontSize: 16 }}>Customer Summary</div>
-            {tierStyle && (
-              <span style={{ padding: "4px 14px", borderRadius: 12, fontSize: 12, fontWeight: 700, background: tierStyle.bg, color: tierStyle.color, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                {summary.tier}
-              </span>
-            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              {churnStyle && summary.churn && (
+                <span style={{ padding: "4px 14px", borderRadius: 12, fontSize: 12, fontWeight: 700, background: churnStyle.bg, color: churnStyle.color, letterSpacing: "0.05em" }}>
+                  <TrendingDown size={11} style={{ marginRight: 4, verticalAlign: "middle" }} />
+                  CHURN: {summary.churn.score}/100 {churnStyle.label}
+                </span>
+              )}
+              {tierStyle && (
+                <span style={{ padding: "4px 14px", borderRadius: 12, fontSize: 12, fontWeight: 700, background: tierStyle.bg, color: tierStyle.color, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {summary.tier}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="stat-grid" style={{ marginBottom: 16 }}>
@@ -220,7 +270,69 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
               <div className="stat-value">{summary.dependents.length}</div>
               <div className="stat-label">Dependents</div>
             </div>
+            {summary.churn && (
+              <div className="stat-card" style={{ borderColor: churnStyle?.color, borderWidth: 2 }}>
+                <div className="stat-value" style={{ color: churnStyle?.color }}>{summary.churn.score}</div>
+                <div className="stat-label">Churn Score</div>
+              </div>
+            )}
           </div>
+
+          {summary.churn && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+              <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Activity size={14} /> Churn Risk Factors
+                </div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={churnFactorData} layout="vertical" margin={{ left: 10, right: 20, top: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={65} />
+                    <Tooltip formatter={(v: number) => [`${v}/100`, "Risk"]} />
+                    <Bar dataKey="score" radius={[0, 4, 4, 0]}>
+                      {churnFactorData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {premiumChartData.length > 0 && (
+                <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Shield size={14} /> Premium Breakdown
+                  </div>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <PieChart>
+                      <Pie data={premiumChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} label={({ name }) => name} labelLine={false}>
+                        {premiumChartData.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => [`€${v.toLocaleString()}`, "Value"]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          )}
+
+          {summary.churn && (
+            <div style={{ marginBottom: 16, padding: "12px 16px", background: churnStyle?.bg, borderRadius: 8, border: `1px solid ${churnStyle?.color}22` }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: churnStyle?.color, marginBottom: 8 }}>Factor Details</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+                {Object.entries(summary.churn.factors).map(([key, f]) => (
+                  <div key={key} style={{ fontSize: 11, textAlign: "center" }}>
+                    <div style={{ fontWeight: 600, textTransform: "capitalize", marginBottom: 2 }}>{key}</div>
+                    <div style={{ color: f.score > 50 ? "#dc2626" : "#16a34a", fontWeight: 700 }}>{f.score}/100</div>
+                    <div style={{ color: "var(--text-muted)", fontSize: 10 }}>{f.detail}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {summary.contracts.length > 0 && (
             <div style={{ marginBottom: 16 }}>
