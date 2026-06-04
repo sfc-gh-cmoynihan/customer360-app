@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
-import { Building, User, Shield, Users, Car, TrendingDown, Activity, Mail, Phone, Hash } from "lucide-react"
+import { Building, User, Shield, Users, Car, TrendingDown, Activity, Mail, Phone, Hash, Search as SearchIcon } from "lucide-react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
 
 interface SearchResult {
@@ -278,12 +278,27 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
           <label><Hash size={12} /> Global Customer ID</label>
           <input
             type="text"
-            placeholder="e.g. MCR-SF-0033r00003hMYRAAA4"
+            placeholder="e.g. SF-SF-0033r00003hMYRAAA4"
             value={idQuery}
             onChange={(e) => setIdQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && idQuery.length >= 3 && searchByField("id", idQuery)}
           />
         </div>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <button
+          className="btn"
+          style={{ padding: "10px 24px", fontSize: 14, fontWeight: 600, background: "var(--accent)", color: "white", border: "none", borderRadius: "var(--radius)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 }}
+          onClick={() => {
+            if (emailQuery.length >= 3) searchByField("email", emailQuery)
+            else if (phoneQuery.length >= 3) searchByField("phone", phoneQuery)
+            else if (idQuery.length >= 3) searchByField("id", idQuery)
+            else if (companyQuery.length >= 2) selectCompany(companyQuery)
+          }}
+        >
+          <SearchIcon size={16} /> Search
+        </button>
       </div>
 
       {loading && <div className="loading"><div className="spinner" /> Searching...</div>}

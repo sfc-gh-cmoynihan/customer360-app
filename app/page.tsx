@@ -1,12 +1,13 @@
 "use client"
 import { useState } from "react"
-import { Search, Users, Phone, Headphones, FileText, Brain } from "lucide-react"
+import { Search, Users, Phone, Headphones, FileText, Brain, Bot } from "lucide-react"
 import { SearchPanel } from "@/components/SearchPanel"
 import { VersionsPanel } from "@/components/VersionsPanel"
 import { CallsPanel } from "@/components/CallsPanel"
 import { RecordingsPanel } from "@/components/RecordingsPanel"
 import { ContractsPanel } from "@/components/ContractsPanel"
 import { ContractSearchPanel } from "@/components/ContractSearchPanel"
+import { CoWorkAgentPanel } from "@/components/CoWorkAgentPanel"
 
 const NAV_ITEMS = [
   { id: "search", label: "Search", icon: Search },
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { id: "recordings", label: "Recordings", icon: Headphones },
   { id: "contracts", label: "Contracts", icon: FileText },
   { id: "semantic", label: "AI Search", icon: Brain },
+  { id: "agent", label: "CoWork Agent", icon: Bot },
 ]
 
 export default function Home() {
@@ -31,6 +33,7 @@ export default function Home() {
     <div className="app-container">
       <aside className="sidebar">
         <div className="sidebar-header">
+          <img src="/logo.png" alt="Customer 360" style={{ height: 36, marginBottom: 8 }} />
           <h1>Customer 360</h1>
           <p>Master Record Search</p>
         </div>
@@ -61,6 +64,7 @@ export default function Home() {
         {activeTab === "recordings" && <RecordingsPanel customerId={selectedCustomerId} />}
         {activeTab === "contracts" && <ContractsPanel customerId={selectedCustomerId} />}
         {activeTab === "semantic" && <ContractSearchPanel />}
+        {activeTab === "agent" && <CoWorkAgentPanel />}
       </main>
     </div>
   )
