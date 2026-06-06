@@ -28,6 +28,19 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' https://*.s3.eu-west-1.amazonaws.com https://*.s3.amazonaws.com https://*.snowflakecomputing.com blob: data:; connect-src 'self' https://*.snowflakecomputing.com https://*.s3.eu-west-1.amazonaws.com https://*.s3.amazonaws.com; img-src 'self' data: blob:;",
+          },
+        ],
+      },
+    ]
+  },
 }
 
 export default nextConfig

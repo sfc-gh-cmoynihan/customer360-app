@@ -91,12 +91,16 @@ export function CallDetailPanel({ callId, onBack }: CallDetailPanelProps) {
             <FileAudio size={16} />
             <span style={{ fontWeight: 600, fontSize: 14 }}>Call Recording</span>
           </div>
-          <video controls preload="none" style={{ width: "100%", borderRadius: 8, background: "#000" }}>
-            <source src={detail.PRESIGNED_URL} type="video/mp4" />
-            Your browser does not support the video element.
-          </video>
-          <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-            {detail.MP4_FILE_PATH}
+          <audio controls preload="auto" crossOrigin="anonymous" style={{ width: "100%" }}>
+            <source src={detail.PRESIGNED_URL} type="audio/mp4" />
+          </audio>
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12 }}>
+            <a href={detail.PRESIGNED_URL} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--accent)" }}>
+              Open recording directly
+            </a>
+            <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+              {detail.MP4_FILE_PATH}
+            </span>
           </div>
         </div>
       )}

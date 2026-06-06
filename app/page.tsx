@@ -1,12 +1,11 @@
 "use client"
 import { useState } from "react"
-import { Search, Users, Phone, Headphones, FileText, Brain, Bot } from "lucide-react"
+import { Search, Users, Phone, Headphones, FileText, Bot } from "lucide-react"
 import { SearchPanel } from "@/components/SearchPanel"
 import { VersionsPanel } from "@/components/VersionsPanel"
 import { CallsPanel } from "@/components/CallsPanel"
 import { RecordingsPanel } from "@/components/RecordingsPanel"
 import { ContractsPanel } from "@/components/ContractsPanel"
-import { ContractSearchPanel } from "@/components/ContractSearchPanel"
 import { CoWorkAgentPanel } from "@/components/CoWorkAgentPanel"
 
 const NAV_ITEMS = [
@@ -15,7 +14,6 @@ const NAV_ITEMS = [
   { id: "calls", label: "Calls", icon: Phone },
   { id: "recordings", label: "Recordings", icon: Headphones },
   { id: "contracts", label: "Contracts", icon: FileText },
-  { id: "semantic", label: "AI Search", icon: Brain },
   { id: "agent", label: "CoWork Agent", icon: Bot },
 ]
 
@@ -35,7 +33,7 @@ export default function Home() {
         <div className="sidebar-header">
           <img src="/logo.png" alt="Customer 360" style={{ height: 36, marginBottom: 8 }} />
           <h1>Customer 360</h1>
-          <p>Master Record Search</p>
+          <p>Master Record Search <span style={{ fontSize: 10, color: "var(--text-muted)" }}>v3</span></p>
         </div>
         {selectedCustomerName && (
           <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)", fontSize: 12 }}>
@@ -63,7 +61,6 @@ export default function Home() {
         {activeTab === "calls" && <CallsPanel customerId={selectedCustomerId} />}
         {activeTab === "recordings" && <RecordingsPanel customerId={selectedCustomerId} />}
         {activeTab === "contracts" && <ContractsPanel customerId={selectedCustomerId} />}
-        {activeTab === "semantic" && <ContractSearchPanel />}
         {activeTab === "agent" && <CoWorkAgentPanel />}
       </main>
     </div>

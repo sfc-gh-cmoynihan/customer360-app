@@ -16,8 +16,6 @@ export async function GET(request: Request) {
              c.CALL_TYPE, c.SENTIMENT, c.MP4_FILE_PATH, c.TRANSCRIPTION,
              c.MASTER_CUSTOMER_ID,
              COALESCE(c.SUMMARY, 'No summary available') AS SUMMARY,
-             BUILD_SCOPED_FILE_URL(@CUSTOMER_360.PUBLIC.CALL_RECORDINGS_STAGE,
-               REPLACE(c.MP4_FILE_PATH, '@CUSTOMER_360.PUBLIC.CALL_RECORDINGS_STAGE/', '')) AS PRESIGNED_URL,
              g.FULL_NAME
       FROM CUSTOMER_360.PUBLIC.CUSTOMER_CALLS c
       JOIN CUSTOMER_360.PUBLIC.CUSTOMER_MASTER_GOLDEN_TABLE g ON c.MASTER_CUSTOMER_ID = g.MASTER_CUSTOMER_ID
@@ -28,7 +26,10 @@ export async function GET(request: Request) {
     if (rows.length === 0) {
       return Response.json({ error: "Call not found" }, { status: 404 })
     }
-    return Response.json(rows[0])
+    const row = rows[0]
+    const fileName = (row.MP4_FILE_PATH || "").replace("@CUSTOMER_360.PUBLIC.CALL_RECORDINGS_STAGE/", "")
+    row.PRESIGNED_URL = fileName ? `/api/play-recording?file=${encodeURIComponent(fileName)}` : ""
+    return Response.json(row)
   } catch (e) {
     console.error(new Date().toISOString(), "[call-detail]", e)
     return Response.json(

@@ -80,7 +80,7 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
   const [companyQuery, setCompanyQuery] = useState("")
   const [selectedCompany, setSelectedCompany] = useState("")
   const [contactQuery, setContactQuery] = useState("")
-  const [emailQuery, setEmailQuery] = useState("")
+  const [emailQuery, setEmailQuery] = useState("colm.moynihan@snowflake.com")
   const [phoneQuery, setPhoneQuery] = useState("")
   const [idQuery, setIdQuery] = useState("")
   const [companySuggestions, setCompanySuggestions] = useState<string[]>([])
@@ -258,7 +258,7 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
           <label><Mail size={12} /> Email</label>
           <input
             type="text"
-            placeholder="e.g. colm@snowflake.com"
+            placeholder="e.g. colm.moynihan@snowflake.com"
             value={emailQuery}
             onChange={(e) => setEmailQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && emailQuery.length >= 3 && searchByField("email", emailQuery)}

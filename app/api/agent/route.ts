@@ -1,145 +1,84 @@
 import { querySnowflake } from "@/lib/snowflake"
 export const dynamic = "force-dynamic"
 
-interface ToolRoute {
-  keywords: string[]
-  semanticView: string
-  name: string
+const TABLE_SCHEMAS: Record<string, string> = {
+  contracts: `Table: CUSTOMER_360.PUBLIC.CUSTOMER_CONTRACTS
+Columns: CONTRACT_ID (TEXT), MASTER_CUSTOMER_ID (TEXT), CUSTOMER_NAME (TEXT), CONTRACT_TITLE (TEXT), CONTRACT_DATE (DATE), EXPIRY_DATE (DATE), CONTRACT_VALUE (NUMBER in euros), STATUS (TEXT: Active/Expired/Pending), SIGNED_BY_CUSTOMER (TEXT), SIGNED_BY_PROVIDER (TEXT), SIGNATURE_DATE (DATE)`,
+  calls: `Table: CUSTOMER_360.PUBLIC.CUSTOMER_CALLS
+Columns: CALL_ID (TEXT), MASTER_CUSTOMER_ID (TEXT), CALL_DATE (TIMESTAMP), DURATION_SECONDS (NUMBER), AGENT_NAME (TEXT), CALL_TYPE (TEXT: Inbound/Outbound/Support), SENTIMENT (TEXT: Positive/Negative/Neutral), SUMMARY (TEXT)`,
+  customers: `Table: CUSTOMER_360.PUBLIC.CUSTOMER_MASTER_GOLDEN_TABLE
+Columns: MASTER_CUSTOMER_ID (TEXT), SOURCE_SYSTEM (TEXT: SALESFORCE/SAP/WEB), FULL_NAME (TEXT), FIRST_NAME (TEXT), LAST_NAME (TEXT), EMAIL (TEXT), PHONE (TEXT), MOBILE_PHONE (TEXT), CITY (TEXT), COUNTRY (TEXT), POSTAL_CODE (TEXT), STREET (TEXT), SF_ACCOUNT_NAME (TEXT), TITLE (TEXT), DEPARTMENT (TEXT), MATCH_CONFIDENCE (FLOAT), RECORD_COUNT (NUMBER), DATE_OF_BIRTH (DATE)`,
+  web: `Table: CUSTOMER_360.PUBLIC.WEB_ACTIVITY
+Columns: ACTIVITY_ID (TEXT), MASTER_CUSTOMER_ID (TEXT), ACTIVITY_TYPE (TEXT), PAGE_URL (TEXT), SESSION_DURATION_SECONDS (NUMBER), PAGES_VIEWED (NUMBER), CHANNEL (TEXT: organic/paid/social/email/direct), DEVICE_TYPE (TEXT: desktop/mobile/tablet), BROWSER (TEXT), ACTIVITY_DATE (TIMESTAMP), FORM_SUBMITTED (BOOLEAN), FORM_NAME (TEXT), CAMPAIGN_SOURCE (TEXT), CAMPAIGN_MEDIUM (TEXT)`,
+  dependents: `Table: CUSTOMER_360.PUBLIC.CUSTOMER_DEPENDENTS
+Columns: DEPENDENT_ID (TEXT), MASTER_CUSTOMER_ID (TEXT), FULL_NAME (TEXT), DATE_OF_BIRTH (DATE), GENDER (TEXT), RELATIONSHIP (TEXT: Spouse/Child/Parent), DRIVER_STATUS (TEXT), LICENSE_TYPE (TEXT)`,
 }
-
-const TOOL_ROUTES: ToolRoute[] = [
-  { keywords: ["contract", "contracts", "contract value", "expir", "active contract", "pending", "signed", "revenue", "average contract"], semanticView: "CUSTOMER_360.PUBLIC.SV_CONTRACTS", name: "Contracts" },
-  { keywords: ["call", "calls", "sentiment", "agent_name", "duration", "negative sentiment", "positive", "neutral", "churn"], semanticView: "CUSTOMER_360.PUBLIC.SV_CALLS", name: "Calls" },
-  { keywords: ["customer", "customers", "record count", "source system", "top 10", "name", "email", "city", "country", "department"], semanticView: "CUSTOMER_360.PUBLIC.SV_CUSTOMERS", name: "Customers" },
-  { keywords: ["web", "session", "channel", "device", "browser", "page", "campaign", "form"], semanticView: "CUSTOMER_360.PUBLIC.SV_WEB_ACTIVITY", name: "Web Activity" },
-  { keywords: ["dependent", "family", "spouse", "child", "relationship", "license"], semanticView: "CUSTOMER_360.PUBLIC.SV_DEPENDENTS", name: "Dependents" },
-]
 
 function routeQuestion(question: string): string[] {
   const q = question.toLowerCase()
-  const matched = TOOL_ROUTES.filter(r => r.keywords.some(k => q.includes(k)))
-  if (matched.length === 0) return [TOOL_ROUTES[2].semanticView]
-  return [...new Set(matched.map(m => m.semanticView))]
+  const routes: string[] = []
+  if (q.match(/contract|expir|active contract|pending|signed|revenue|average contract/)) routes.push("contracts")
+  if (q.match(/call|sentiment|agent_name|duration|negative|positive|neutral|churn/)) routes.push("calls")
+  if (q.match(/customer|record count|source system|top 10|name|email|city|country|department/)) routes.push("customers")
+  if (q.match(/web|session|channel|device|browser|page|campaign|form/)) routes.push("web")
+  if (q.match(/dependent|family|spouse|child|relationship|license/)) routes.push("dependents")
+  if (routes.length === 0) routes.push("customers")
+  return routes
 }
 
-function isSearchQuery(question: string): boolean {
-  const q = question.toLowerCase()
-  return q.includes("find contract") || q.includes("search contract") || q.includes("look for") || (q.includes("related to") && q.includes("contract"))
-}
-
-async function callCortexAnalyst(question: string, semanticView: string): Promise<{ sql: string; interpretation: string } | null> {
+async function generateAndRunSQL(question: string, schemas: string[]): Promise<string | null> {
+  const schemaText = schemas.map(s => TABLE_SCHEMAS[s]).join("\n\n")
   const escapedQ = question.replace(/'/g, "''")
-  const sql = `
-    SELECT SNOWFLAKE.CORTEX.ANALYST(
-      '${semanticView}',
-      [{'role': 'user', 'content': [{'type': 'text', 'text': '${escapedQ}'}]}]
-    ) AS result
-  `
-  try {
-    const rows = await querySnowflake(sql)
-    if (!rows || rows.length === 0) return null
-    const raw = rows[0].RESULT || rows[0].result
-    const result = typeof raw === "string" ? JSON.parse(raw) : raw
-    const content = result?.message?.content || result?.content || []
-    let sqlStatement = ""
-    let interpretation = ""
-    for (const item of content) {
-      if (item.type === "sql") sqlStatement = item.statement
-      if (item.type === "text") interpretation = item.text
-    }
-    return sqlStatement ? { sql: sqlStatement, interpretation } : null
-  } catch {
-    return null
-  }
-}
 
-async function callCortexAnalystRest(question: string, semanticView: string): Promise<{ sql: string; interpretation: string } | null> {
-  const fs = await import("fs")
+  const prompt = `You are a Snowflake SQL generator. Output ONLY the SQL query with no other text, no explanation, no markdown fences, no comments. Just raw SQL.
+Rules:
+- Use fully qualified table names (CUSTOMER_360.PUBLIC.TABLE_NAME)
+- Only use columns from the schema below
+- LIMIT 20
+- Output ONLY the SQL, nothing else
 
-  let token = ""
-  let host = ""
+${schemaText}
 
-  const SPCS_TOKEN_PATH = "/snowflake/session/token"
-  try {
-    token = fs.readFileSync(SPCS_TOKEN_PATH, "utf8").trim()
-    host = process.env.SNOWFLAKE_HOST || ""
-    if (!host && process.env.SNOWFLAKE_ACCOUNT) {
-      const acct = process.env.SNOWFLAKE_ACCOUNT.replace(/_/g, "-")
-      host = `${acct}.snowflakecomputing.com`
-    }
-  } catch {}
+Question: ${escapedQ}
+SQL:`
 
-  if (!token) {
-    const snowflake = (await import("snowflake-sdk")).default
-    const { readTomlDefaultConnection } = await import("@/lib/snowflake")
-    const tomlConn = readTomlDefaultConnection()
-    if (!tomlConn) return null
+  const escapedPrompt = prompt.replace(/'/g, "''")
 
-    const connResult = await new Promise<{ token: string; host: string }>((resolve, reject) => {
-      const config: Record<string, unknown> = { ...tomlConn, application: "Customer360App" }
-      if ((tomlConn as Record<string, unknown>).host && !config.accessUrl) {
-        config.accessUrl = `https://${(tomlConn as Record<string, unknown>).host}`
-      }
-      const conn = snowflake.createConnection(config as Parameters<typeof snowflake.createConnection>[0])
-      conn.connect((err) => {
-        if (err) { reject(err); return }
-        const rest = (conn as unknown as { rest: { token: string } }).rest
-        const h = (conn as unknown as { host: string }).host
-        resolve({ token: rest.token, host: h })
-        conn.destroy(() => {})
-      })
-    })
-    token = connResult.token
-    host = connResult.host
-  }
-
-  const url = `https://${host}/api/v2/cortex/analyst/message`
-  const payload = {
-    messages: [{ role: "user", content: [{ type: "text", text: question }] }],
-    semantic_view: semanticView,
-  }
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Authorization": `Snowflake Token="${token}"`, "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    ...(process.env.NODE_TLS_REJECT_UNAUTHORIZED === "0" ? {} : {}),
-  })
-
-  if (!res.ok) return null
-  const data = await res.json()
-  const content = data?.message?.content || []
-  let sqlStatement = ""
-  let interpretation = ""
-  for (const item of content) {
-    if (item.type === "sql") sqlStatement = item.statement
-    if (item.type === "text") interpretation = item.text
-  }
-  return sqlStatement ? { sql: sqlStatement, interpretation } : null
-}
-
-async function callCortexSearch(question: string): Promise<string | null> {
-  const escapedQ = question.replace(/'/g, "''")
   try {
     const rows = await querySnowflake(`
-      SELECT PARSE_JSON(
-        SNOWFLAKE.CORTEX.SEARCH_PREVIEW(
-          'CUSTOMER_360.PUBLIC.CONTRACT_SEARCH_SERVICE',
-          '${escapedQ}',
-          5
-        )
-      ):results AS results
+      SELECT SNOWFLAKE.CORTEX.COMPLETE('llama3.1-70b', '${escapedPrompt}') AS SQL_QUERY
     `)
+
     if (!rows || rows.length === 0) return null
-    const raw = rows[0].RESULTS || rows[0].results
-    const results = typeof raw === "string" ? JSON.parse(raw) : raw
-    if (!results || results.length === 0) return null
-    let output = "**Contract Search Results:**\n\n"
-    for (const r of results) {
-      output += `- **${r.CONTRACT_TITLE || r.contract_title}** (${r.CUSTOMER_NAME || r.customer_name}) - Status: ${r.STATUS || r.status}, Value: €${r.CONTRACT_VALUE || r.contract_value}\n`
+
+    let sql = (rows[0].SQL_QUERY || "").trim()
+    sql = sql.replace(/^```sql\s*/i, "").replace(/```\s*$/, "").trim()
+    const sqlMatch = sql.match(/(?:^|\n)((?:SELECT|WITH)\b[\s\S]*?)(;|$)/i)
+    if (sqlMatch) sql = sqlMatch[1].trim()
+    if (sql.toUpperCase().startsWith("SELECT") || sql.toUpperCase().startsWith("WITH")) {
+      if (!sql.includes("LIMIT")) sql += " LIMIT 20"
+
+      const dataRows = await querySnowflake(sql)
+      if (!dataRows || dataRows.length === 0) return "No results found for that query."
+
+      if (dataRows.length === 1 && Object.keys(dataRows[0]).length <= 3) {
+        return Object.entries(dataRows[0]).map(([k, v]) => `**${k.replace(/_/g, " ")}**: ${v}`).join(" | ")
+      }
+
+      const cols = Object.keys(dataRows[0])
+      let table = "| " + cols.join(" | ") + " |\n"
+      table += "| " + cols.map(() => "---").join(" | ") + " |\n"
+      for (const row of dataRows.slice(0, 20)) {
+        table += "| " + cols.map(c => row[c] ?? "").join(" | ") + " |\n"
+      }
+      return table
     }
-    return output
-  } catch {
+    return null
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes("SQL compilation") || msg.includes("does not exist")) {
+      return `*Query error: ${msg.slice(0, 300)}*`
+    }
     return null
   }
 }
@@ -159,50 +98,14 @@ export async function POST(req: Request) {
       return Response.json({ error: "No question found" }, { status: 400 })
     }
 
-    if (isSearchQuery(question)) {
-      const searchResult = await callCortexSearch(question)
-      if (searchResult) return Response.json({ answer: searchResult })
+    const schemas = routeQuestion(question)
+    const answer = await generateAndRunSQL(question, schemas)
+
+    if (answer) {
+      return Response.json({ answer })
     }
 
-    const semanticViews = routeQuestion(question)
-    const results: string[] = []
-
-    for (const sv of semanticViews) {
-      const analystResult = await callCortexAnalystRest(question, sv)
-      if (analystResult) {
-        try {
-          const rows = await querySnowflake(analystResult.sql)
-          if (rows && rows.length > 0) {
-            const viewName = TOOL_ROUTES.find(r => r.semanticView === sv)?.name || sv
-            let table = ""
-            if (rows.length === 1 && Object.keys(rows[0]).length <= 3) {
-              const entries = Object.entries(rows[0]).map(([k, v]) => `**${k.replace(/_/g, " ")}**: ${v}`).join(" | ")
-              table = entries
-            } else {
-              const cols = Object.keys(rows[0])
-              table = "| " + cols.join(" | ") + " |\n"
-              table += "| " + cols.map(() => "---").join(" | ") + " |\n"
-              for (const row of rows.slice(0, 20)) {
-                table += "| " + cols.map(c => row[c] ?? "").join(" | ") + " |\n"
-              }
-              if (rows.length > 20) table += `\n*...and ${rows.length - 20} more rows*`
-            }
-            results.push(`${analystResult.interpretation}\n\n${table}`)
-          }
-        } catch (sqlErr) {
-          const msg = sqlErr instanceof Error ? sqlErr.message : String(sqlErr)
-          results.push(`*Query error: ${msg.slice(0, 200)}*`)
-        }
-      }
-    }
-
-    if (results.length === 0) {
-      const searchResult = await callCortexSearch(question)
-      if (searchResult) return Response.json({ answer: searchResult })
-      return Response.json({ answer: "I couldn't find relevant data for that question. Try asking about customers, contracts, calls, web activity, or dependents." })
-    }
-
-    return Response.json({ answer: results.join("\n\n---\n\n") })
+    return Response.json({ answer: "I couldn't generate a valid query for that question. Try rephrasing or ask about customers, contracts, calls, web activity, or dependents." })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     console.error("[agent] error:", message)
