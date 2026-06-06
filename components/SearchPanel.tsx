@@ -198,11 +198,11 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
   })).filter(d => d.value > 0) || []
 
   const churnFactorData = summary?.churn ? [
-    { name: "Sentiment", score: summary.churn.factors.sentiment.score, fill: summary.churn.factors.sentiment.score > 50 ? "#ef4444" : "#10b981" },
-    { name: "Policies", score: summary.churn.factors.policies.score, fill: summary.churn.factors.policies.score > 50 ? "#ef4444" : "#10b981" },
-    { name: "Spend", score: summary.churn.factors.spend.score, fill: summary.churn.factors.spend.score > 50 ? "#ef4444" : "#10b981" },
-    { name: "Tenure", score: summary.churn.factors.tenure.score, fill: summary.churn.factors.tenure.score > 50 ? "#ef4444" : "#10b981" },
-    { name: "Age", score: summary.churn.factors.age.score, fill: summary.churn.factors.age.score > 50 ? "#ef4444" : "#10b981" },
+    { name: "Sentiment", score: summary.churn.factors.sentiment.score, fill: "#6366f1" },
+    { name: "Policies", score: summary.churn.factors.policies.score, fill: "#f59e0b" },
+    { name: "Spend", score: summary.churn.factors.spend.score, fill: "#ef4444" },
+    { name: "Tenure", score: summary.churn.factors.tenure.score, fill: "#06b6d4" },
+    { name: "Age", score: summary.churn.factors.age.score, fill: "#8b5cf6" },
   ] : []
 
   return (
@@ -344,7 +344,7 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
           </div>
 
           {summary.churn && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 16 }}>
               <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
                   <Activity size={14} /> Churn Risk Factors
@@ -369,9 +369,9 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
                     <Shield size={14} /> Premium Breakdown
                   </div>
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={320}>
                     <PieChart>
-                      <Pie data={premiumChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, value }) => `${name} €${value.toLocaleString()}`} labelLine={true} style={{ fontSize: 12 }}>
+                      <Pie data={premiumChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} label={({ name, value }) => `${name} €${value.toLocaleString()}`} labelLine={true} style={{ fontSize: 13 }}>
                         {premiumChartData.map((_, i) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
