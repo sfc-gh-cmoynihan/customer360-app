@@ -3,7 +3,8 @@ export const dynamic = "force-dynamic"
 
 const TABLE_SCHEMAS: Record<string, string> = {
   contracts: `Table: CUSTOMER_360.PUBLIC.CUSTOMER_CONTRACTS
-Columns: CONTRACT_ID (TEXT), MASTER_CUSTOMER_ID (TEXT), CUSTOMER_NAME (TEXT), CONTRACT_TITLE (TEXT), CONTRACT_DATE (DATE), EXPIRY_DATE (DATE), CONTRACT_VALUE (NUMBER in euros), STATUS (TEXT: Active/Expired/Pending), SIGNED_BY_CUSTOMER (TEXT), SIGNED_BY_PROVIDER (TEXT), SIGNATURE_DATE (DATE)`,
+Columns: CONTRACT_ID (TEXT), MASTER_CUSTOMER_ID (TEXT), CUSTOMER_NAME (TEXT), CONTRACT_TITLE (TEXT), CONTRACT_DATE (DATE), EXPIRY_DATE (DATE), CONTRACT_VALUE (NUMBER in euros), STATUS (TEXT: Active/Expired/Pending), SIGNED_BY_CUSTOMER (TEXT), SIGNED_BY_PROVIDER (TEXT), SIGNATURE_DATE (DATE)
+Note: Do NOT select PDF_STAGE_PATH or CONTRACT_TEXT columns`,
   calls: `Table: CUSTOMER_360.PUBLIC.CUSTOMER_CALLS
 Columns: CALL_ID (TEXT), MASTER_CUSTOMER_ID (TEXT), CALL_DATE (TIMESTAMP), DURATION_SECONDS (NUMBER), AGENT_NAME (TEXT), CALL_TYPE (TEXT: Inbound/Outbound/Support), SENTIMENT (TEXT: Positive/Negative/Neutral), SUMMARY (TEXT)`,
   customers: `Table: CUSTOMER_360.PUBLIC.CUSTOMER_MASTER_GOLDEN_TABLE
@@ -26,7 +27,7 @@ function routeQuestion(question: string): string[] {
   return routes
 }
 
-async function generateAndRunSQL(question: string, schemas: string[]): Promise<string | null> {
+async function generateAndRunSQL(question: string, schemas: string[], model: string): Promise<string | null> {
   const schemaText = schemas.map(s => TABLE_SCHEMAS[s]).join("\n\n")
   const escapedQ = question.replace(/'/g, "''")
 
@@ -34,6 +35,8 @@ async function generateAndRunSQL(question: string, schemas: string[]): Promise<s
 Rules:
 - Use fully qualified table names (CUSTOMER_360.PUBLIC.TABLE_NAME)
 - Only use columns from the schema below
+- NEVER use SELECT * - always list specific columns
+- For DATE columns, use TO_CHAR(col, 'DD Mon YYYY') to format dates
 - LIMIT 20
 - Output ONLY the SQL, nothing else
 
@@ -46,7 +49,7 @@ SQL:`
 
   try {
     const rows = await querySnowflake(`
-      SELECT SNOWFLAKE.CORTEX.COMPLETE('llama3.1-70b', '${escapedPrompt}') AS SQL_QUERY
+      SELECT SNOWFLAKE.CORTEX.COMPLETE('${model}', '${escapedPrompt}') AS SQL_QUERY
     `)
 
     if (!rows || rows.length === 0) return null
@@ -85,7 +88,7 @@ SQL:`
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json()
+    const { messages, model } = await req.json()
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return Response.json({ error: "messages array required" }, { status: 400 })
@@ -98,8 +101,9 @@ export async function POST(req: Request) {
       return Response.json({ error: "No question found" }, { status: 400 })
     }
 
+    const llmModel = model || "llama3.1-70b"
     const schemas = routeQuestion(question)
-    const answer = await generateAndRunSQL(question, schemas)
+    const answer = await generateAndRunSQL(question, schemas, llmModel)
 
     if (answer) {
       return Response.json({ answer })

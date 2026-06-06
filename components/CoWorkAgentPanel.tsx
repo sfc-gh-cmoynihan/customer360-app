@@ -6,6 +6,78 @@ interface Message {
   content: string
 }
 
+function FormattedAnswer({ content }: { content: string }) {
+  if (!content.includes("|")) {
+    const parts = content.split(/\*\*(.*?)\*\*/g)
+    return (
+      <div>
+        {parts.map((part, i) =>
+          i % 2 === 1 ? <strong key={i}>{part}</strong> : <span key={i}>{part}</span>
+        )}
+      </div>
+    )
+  }
+
+  const lines = content.trim().split("\n").filter(l => l.trim())
+  if (lines.length < 3 || !lines[0].includes("|")) {
+    return <div style={{ whiteSpace: "pre-wrap" }}>{content}</div>
+  }
+
+  const headers = lines[0].split("|").map(h => h.trim()).filter(Boolean)
+  const dataLines = lines.slice(2)
+
+  const formatHeader = (h: string) => h.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+  const formatValue = (v: string, col: string) => {
+    if (!v || v === "-") return <span style={{ color: "#9ca3af" }}>—</span>
+    if (col.match(/DATE|EXPIRY/i) && v.includes("GMT")) {
+      return new Date(v).toLocaleDateString("en-IE", { day: "numeric", month: "short", year: "numeric" })
+    }
+    if (col.match(/VALUE|COST|AMOUNT/i) && !isNaN(Number(v))) {
+      return `€${Number(v).toLocaleString()}`
+    }
+    if (col.match(/STATUS/i)) {
+      const color = v === "Active" ? "#16a34a" : v === "Expired" ? "#dc2626" : "#f59e0b"
+      return <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: `${color}18`, color }}>{v}</span>
+    }
+    if (col.match(/SENTIMENT/i)) {
+      const color = v === "Positive" ? "#16a34a" : v === "Negative" ? "#dc2626" : "#6b7280"
+      return <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: `${color}18`, color }}>{v}</span>
+    }
+    if (v.length > 60) return v.slice(0, 60) + "..."
+    return v
+  }
+
+  const skipCols = new Set(["PDF_STAGE_PATH", "CONTRACT_TEXT", "MASTER_CUSTOMER_ID"])
+  const visibleHeaders = headers.filter(h => !skipCols.has(h))
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>{dataLines.length} result{dataLines.length !== 1 ? "s" : ""}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {dataLines.map((line, ri) => {
+          const cells = line.split("|").map(c => c.trim()).filter(Boolean)
+          return (
+            <div key={ri} style={{ padding: "10px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "6px 16px" }}>
+                {visibleHeaders.map((h, ci) => {
+                  const cellIdx = headers.indexOf(h)
+                  const val = cells[cellIdx] || ""
+                  return (
+                    <div key={ci}>
+                      <div style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase", fontWeight: 600 }}>{formatHeader(h)}</div>
+                      <div style={{ fontSize: 13, color: "#1f2937", marginTop: 2 }}>{formatValue(val, h)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 const SAMPLE_QUESTIONS = [
   "What is the total value of all active contracts?",
   "Show me contracts expiring in the next 30 days",
@@ -23,7 +95,7 @@ export function CoWorkAgentPanel() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
-  const [selectedModel, setSelectedModel] = useState("llama3.1-70b")
+  const [selectedModel, setSelectedModel] = useState("claude-opus-4-8")
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -39,7 +111,7 @@ export function CoWorkAgentPanel() {
     setLoading(true)
     try {
       const apiMessages = updated.map(m => ({ role: m.role, content: [{ type: "text", text: m.content }] }))
-      const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: apiMessages }) })
+      const res = await fetch("/api/agent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: apiMessages, model: selectedModel }) })
       const data = await res.json()
       setMessages([...updated, { role: "assistant", content: data.error ? `Error: ${data.error}` : (data.answer || "No response") }])
     } catch (err) {
@@ -59,8 +131,8 @@ export function CoWorkAgentPanel() {
             </div>
           )}
           {messages.map((msg, i) => (
-            <div key={i} style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 8, maxWidth: "80%", fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", ...(msg.role === "user" ? { background: "#3b82f6", color: "#fff", marginLeft: "auto" } : { background: "#f1f3f5", color: "#1a1a2e" }) }}>
-              {msg.content}
+            <div key={i} style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 8, maxWidth: msg.role === "user" ? "80%" : "95%", fontSize: 14, lineHeight: 1.6, ...(msg.role === "user" ? { background: "#3b82f6", color: "#fff", marginLeft: "auto", whiteSpace: "pre-wrap" } : { background: "#f8f9fa", color: "#1a1a2e", border: "1px solid #e0e0e0" }) }}>
+              {msg.role === "assistant" ? <FormattedAnswer content={msg.content} /> : msg.content}
             </div>
           ))}
           {loading && <div style={{ padding: "12px 16px", borderRadius: 8, background: "#f1f3f5", color: "#6c757d", maxWidth: "80%" }}>Thinking...</div>}
@@ -99,12 +171,13 @@ export function CoWorkAgentPanel() {
             onChange={e => setSelectedModel(e.target.value)}
             style={{ width: "100%", fontSize: 12, padding: "8px 10px", border: "1px solid #e0e0e0", borderRadius: 6, background: "#fff", cursor: "pointer" }}
           >
-            <option value="llama3.1-8b">Llama 3.1 8B (Fastest)</option>
+            <option value="claude-opus-4-8">Claude Opus 4 (Latest)</option>
+            <option value="chatgpt-5-5">ChatGPT 5-5</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
             <option value="llama3.1-70b">Llama 3.1 70B</option>
-            <option value="mistral-large2">Mistral Large 2</option>
             <option value="snowflake-llama-3.3-70b">Snowflake Llama 3.3 70B</option>
-            <option value="claude-sonnet-4-6">Claude Sonnet 4</option>
-            <option value="claude-opus-4-6">Claude Opus 4</option>
+            <option value="mistral-large2">Mistral Large 2</option>
+            <option value="llama3.1-8b">Llama 3.1 8B (Fastest)</option>
           </select>
         </div>
         <div style={{ fontSize: 11, color: "#6c757d", textTransform: "uppercase", marginBottom: 8, fontWeight: 600 }}>Sample Questions</div>
