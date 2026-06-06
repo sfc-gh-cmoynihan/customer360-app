@@ -91,7 +91,7 @@ export function CallDetailPanel({ callId, onBack }: CallDetailPanelProps) {
             <FileAudio size={16} />
             <span style={{ fontWeight: 600, fontSize: 14 }}>Call Recording</span>
           </div>
-          <audio controls preload="auto" crossOrigin="anonymous" style={{ width: "100%" }}>
+          <audio controls preload="auto" style={{ width: "100%" }}>
             <source src={detail.PRESIGNED_URL} type="audio/mp4" />
           </audio>
           <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12 }}>

@@ -369,9 +369,9 @@ export function SearchPanel({ onCustomerSelect }: SearchPanelProps) {
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
                     <Shield size={14} /> Premium Breakdown
                   </div>
-                  <ResponsiveContainer width="100%" height={160}>
+                  <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
-                      <Pie data={premiumChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} label={({ name }) => name} labelLine={false}>
+                      <Pie data={premiumChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, value }) => `${name} €${value.toLocaleString()}`} labelLine={true} style={{ fontSize: 12 }}>
                         {premiumChartData.map((_, i) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
